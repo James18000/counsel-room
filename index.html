@@ -376,7 +376,7 @@
       try {
         setStep(0); addDivider("① 各自发表看法", "每位顾问独立给出意见");
         const opinions = [];
-        await pool(seats, serial ? 1 : 7, async idx => {
+        await pool(seats, 4, async idx => {
           if (!alive()) return;
           setSeat(idx, "thinking");
           const cfg = advisorCfg[idx];
@@ -393,7 +393,7 @@
 
         if (mode === "full") {
           setStep(1); addDivider("② 匿名互相点评", "审阅者看不到是谁说的");
-          await pool(reviewers, serial ? 1 : 3, async r => {
+          await pool(reviewers, 3, async r => {
             const text = await callLLM("你是匿名审阅者，只看到去掉姓名的顾问意见。请用简体中文，不超过 120 字，从这个角度审阅：" + r.focus, `${brief}\n\n各位顾问的意见：\n${anon}`, 500);
             if (!alive()) return;
             addMsg({ name: r.label, role: r.focus.split("：")[0], avatar: r.label.slice(-1), text });
