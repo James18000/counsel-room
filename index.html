@@ -372,43 +372,66 @@
       controller = new AbortController(); running = true;
       goBtn.textContent = "停止"; goBtn.classList.add("stop"); setStatus("running", "会议进行中");
       const brief = `决策：${question}\n背景：${contextEl.value.trim() || "未提供"}`;
-      const seats = activeSeats(), serial = true;
+      const seats = activeSeats();
+      const splitSections = raw => {
+        const out = [], parts = raw.split(/【([^】\n]+)】/);
+        for (let i = 1; i < parts.length; i += 2) out.push({ name: parts[i].replace(/\s/g, ""), text: parts[i + 1].trim() });
+        return out;
+      };
+      const pick = (secs, name) => (secs.find(s => s.name === name.replace(/\s/g, "")) || {}).text || "";
       try {
+        // 第 1 次调用：所有顾问一次说完（省免费额度）
         setStep(0); addDivider("① 各自发表看法", "每位顾问独立给出意见");
-        const opinions = [];
-        await pool(seats, 4, async idx => {
-          if (!alive()) return;
-          setSeat(idx, "thinking");
-          const cfg = advisorCfg[idx];
-          const text = await callLLM(personas[idx] + "\n你正在一个决策顾问会上，独立评审提交上来的决策。", brief + FORMAT, 700, cfg.temp, cfg.model);
-          if (!alive()) return;
+        seats.forEach(i => setSeat(i, "thinking"));
+        const roster = seats.map(i => `【${people[i].name}】\n${personas[i]}`).join("\n\n");
+        const raw1 = await callLLM(
+          "你要在一个决策顾问会上，同时扮演下面几位性格迥异的顾问，让每个人独立评审提交上来的决策。每位顾问都必须严格坚持自己的角色立场，不要互相附和或折中；如果角色会得出与常理不同的结论，请直说。\n\n" + roster,
+          brief + "\n\n请按上面的顺序，为每位顾问各写一段，用简体中文。每段必须以【顾问名字】单独成行开头（名字与上面完全一致），然后严格四行：\n结论：支持 或 先补条件 或 不建议（三选一，只写这几个字）\n看法：...\n风险：...\n建议：...\n每位顾问总共不超过 90 字。", 900, 0.9);
+        if (!alive()) return;
+        const secs1 = splitSections(raw1), opinions = [];
+        for (const idx of seats) {
+          const text = pick(secs1, people[idx].name);
+          if (!text) { setSeat(idx, "idle"); continue; }
           const verdict = parseVerdict(text);
           if (verdict) votes[VERDICTS[verdict]]++;
           opinions.push({ idx, text });
           setSeat(idx, "done"); updateTally();
           addMsg({ name: people[idx].name, role: people[idx].lens, avatar: avatarSvg(people[idx]), text: text.replace(/^结论[:：].*\n?/, ""), verdict });
-        });
-        if (!alive()) return;
+          await sleep(450, controller.signal); if (!alive()) return;
+        }
+        if (!opinions.length) throw new Error("AI 的回复格式不对，请点“重新开会”再试一次。");
         const anon = opinions.map((o, i) => `顾问${i + 1}：\n${o.text}`).join("\n\n");
 
-        if (mode === "full") {
+        // 第 2 次调用：点评 + 反方 + 主持人一次说完
+        setStatus("running", "审阅与总结中");
+        const full = mode === "full";
+        const raw2 = await callLLM(
+          "你要同时扮演下面几个角色，对一场决策顾问会做后续环节，全部用简体中文。\n" +
+          (full ? "【匿名审阅者 A】【匿名审阅者 B】【匿名审阅者 C】：匿名审阅者，只看到去掉姓名的意见，各不超过 80 字。A 的角度是“最强意见”：指出最有力、最值得采纳的共同信号；B 是“最大盲点”：指出所有顾问都忽略的关键问题；C 是“表面共识”：检查一致意见是否只是表面一致、理由是否重复。\n" : "") +
+          "【反方】：唱反调的人。先用一句话概括目前大家倾向的结论，再给出对它最有力的反驳（具体的反例），最后列出“要推翻这个结论，至少还需要知道什么”。不超过 160 字。\n" +
+          "【主持人】：会议主持人。综合各顾问意见和反方质疑，不要简单数票，要权衡证据强弱。严格按格式：\n分歧：顾问之间最关键的分歧\n最终建议：支持 或 先补条件 或 不建议（只写这几个字之一）\n理由：一句话\n第一步：今天就能做的一件事\n如何验证：怎么判断这个建议对不对\n总计不超过 200 字。",
+          `${brief}\n\n顾问意见：\n${anon}\n\n请按顺序输出，每个角色以【角色名】单独成行开头（名字与上面完全一致）。`, 900, 0.7);
+        if (!alive()) return;
+        const secs2 = splitSections(raw2);
+
+        if (full) {
           setStep(1); addDivider("② 匿名互相点评", "审阅者看不到是谁说的");
-          await pool(reviewers, 3, async r => {
-            const text = await callLLM("你是匿名审阅者，只看到去掉姓名的顾问意见。请用简体中文，不超过 120 字，从这个角度审阅：" + r.focus, `${brief}\n\n各位顾问的意见：\n${anon}`, 500);
-            if (!alive()) return;
+          for (const r of reviewers) {
+            const text = pick(secs2, r.label);
+            if (!text) continue;
             addMsg({ name: r.label, role: r.focus.split("：")[0], avatar: r.label.slice(-1), text });
-          });
-          if (!alive()) return;
+            await sleep(450, controller.signal); if (!alive()) return;
+          }
         }
 
         setStep(2); addDivider("③ 专门唱反调", "攻击正在形成的共识");
-        const da = await callLLM("你是唱反调的人。先用一句话概括目前大家倾向的结论，再给出对它最有力的反驳（具体的反例），最后列出‘要推翻这个结论，至少还需要知道什么’。简体中文，不超过 220 字。", `${brief}\n\n顾问意见：\n${anon}`, 700);
-        if (!alive()) return;
-        addMsg({ name: "反方", role: "最有力的反驳", avatar: "反", text: da });
+        const da = pick(secs2, "反方");
+        if (da) addMsg({ name: "反方", role: "最有力的反驳", avatar: "反", text: da });
+        await sleep(450, controller.signal); if (!alive()) return;
 
         setStep(3); addDivider("④ 主持人总结", "综合所有意见给出建议");
-        const chair = await callLLM("你是会议主持人。综合各顾问意见和反方质疑，不要简单数票，要权衡证据强弱。用简体中文，严格按格式：\n分歧：顾问之间最关键的分歧\n最终建议：支持 或 先补条件 或 不建议（只写这几个字之一）\n理由：一句话\n第一步：今天就能做的一件事\n如何验证：怎么判断这个建议对不对\n总计不超过 260 字。", `${brief}\n\n顾问意见：\n${anon}\n\n反方质疑：\n${da}`, 900);
-        if (!alive()) return;
+        const chair = pick(secs2, "主持人");
+        if (!chair) throw new Error("AI 的总结不完整，请点“重新开会”再试一次。");
         addMsg({ name: "主持人", role: "总结", avatar: "主", text: chair, cls: "chair" });
         const rec = parseVerdict(chair);
         $("result").className = "";
