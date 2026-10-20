@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183b36">
+  <title>顾问会 · 帮你做决定</title>
+  <style>
+    :root {
+      --ink: #183b36; --ink-soft: #4f6a62; --muted: #7a8b84;
+      --paper: #f3f6f2; --card: #ffffff; --line: #e1e8e3;
+      --board: #e3eee6; --accent: #ef785d; --green: #4f9a7e; --amber: #e0a93c; --red: #d65c4a;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body { background: var(--paper); color: var(--ink); font: 15px/1.55 "Segoe UI", "Microsoft YaHei", Arial, sans-serif; }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    :focus-visible { outline: 3px solid rgba(79,154,126,.4); outline-offset: 2px; }
+
+    .page { max-width: 1180px; margin: 0 auto; padding: 28px 24px 56px; }
+    header { margin-bottom: 22px; }
+    header h1 { margin: 0; font-size: 30px; letter-spacing: -.5px; }
+    header p { margin: 6px 0 0; color: var(--muted); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 22px; align-items: start; }
+    .col { display: grid; gap: 18px; min-width: 0; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; }
+    .card h2 { margin: 0 0 12px; font-size: 14px; color: var(--ink-soft); font-weight: 700; }
+
+    .field-label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .field-hint { font-weight: 400; color: var(--muted); }
+    textarea.input { width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; background: #fbfcfa; line-height: 1.5; }
+    textarea.input:focus { background: #fff; border-color: #8fb8a5; }
+    #decision { min-height: 56px; font-size: 17px; font-weight: 650; }
+    #context { min-height: 84px; margin-bottom: 4px; }
+    .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 14px; }
+    .seg { display: inline-flex; background: #edf2ed; border-radius: 11px; padding: 3px; }
+    .seg button { border: 0; background: transparent; padding: 7px 13px; border-radius: 9px; color: var(--muted); cursor: pointer; }
+    .seg button[aria-pressed="true"] { background: #fff; color: var(--ink); font-weight: 700; box-shadow: 0 1px 3px rgba(24,59,54,.14); }
+    .go { margin-left: auto; border: 0; border-radius: 13px; padding: 12px 26px; background: var(--ink); color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 3px 0 #0d2a26; }
+    .go:hover { background: #24534b; }
+    .go.stop { background: var(--accent); box-shadow: 0 3px 0 #b8553f; }
+    details.settings { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+    details.settings summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+    .settings-body { display: grid; gap: 10px; margin-top: 12px; }
+    .settings-body label { display: grid; gap: 4px; font-size: 12px; color: var(--ink-soft); }
+    .settings-body label[hidden] { display: none; }
+    .settings-body input, .settings-body select { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: #fbfcfa; }
+    .settings-note { margin: 0; font-size: 12px; color: var(--muted); }
+
+    .room { background: var(--board); border-color: #cddbd1; }
+    .room-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+    .room-head h2 { margin: 0; }
+    .status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-soft); }
+    .status i { width: 8px; height: 8px; border-radius: 50%; background: #a2b2a9; }
+    .status.running i { background: var(--accent); animation: pulse 1.4s infinite; }
+    .status.done i { background: var(--green); }
+    .steps { display: flex; gap: 6px; margin: 12px 0 8px; }
+    .step { flex: 1; font-size: 12px; text-align: center; padding: 7px 4px; border-radius: 9px; background: rgba(255,255,255,.55); color: var(--muted); }
+    .step.current { background: #fff; color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px var(--accent); }
+    .step.done { color: var(--green); }
+    .seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 8px; }
+    .seat { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; padding: 10px 6px; border-radius: 14px; transition: .2s; }
+    .seat.active { background: rgba(255,255,255,.85); transform: translateY(-4px); box-shadow: 0 8px 18px rgba(36,81,62,.13); }
+    .seat svg { width: 68px; height: 68px; }
+    .seat.active svg { animation: bob .7s ease-in-out infinite alternate; }
+    .seat b { font-size: 13px; }
+    .seat small { color: var(--ink-soft); font-size: 11px; line-height: 1.3; min-height: 28px; }
+    .seat em { font-style: normal; font-size: 11px; color: var(--muted); }
+    .seat.active em { color: var(--accent); font-weight: 700; }
+    .seat.spoke em { color: var(--green); }
+
+    .tally { display: grid; gap: 9px; }
+    .tally-row { display: grid; grid-template-columns: 72px 1fr 34px; align-items: center; gap: 10px; font-size: 13px; }
+    .bar { height: 9px; background: #eaf0ea; border-radius: 9px; overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width .4s; }
+    .tally-row:nth-child(1) .bar i { background: var(--green); }
+    .tally-row:nth-child(2) .bar i { background: var(--amber); }
+    .tally-row:nth-child(3) .bar i { background: var(--red); }
+    .tally-row strong { text-align: right; }
+    .legend { margin: 12px 0 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .result-empty { color: var(--muted); }
+    .result-title { font-size: 20px; font-weight: 750; margin-bottom: 8px; }
+    .result-text { white-space: pre-line; color: var(--ink-soft); }
+
+    .log { position: sticky; top: 16px; max-height: calc(100vh - 32px); display: flex; flex-direction: column; padding-bottom: 14px; }
+    .log-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .log-head h2 { margin: 0 0 12px; }
+    .log-head span { font-size: 12px; color: var(--muted); }
+    .feed { overflow-y: auto; flex: 1; min-height: 160px; padding-right: 4px; scroll-behavior: smooth; }
+    .feed-empty { color: var(--muted); font-size: 13px; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; }
+    .feed-empty[hidden] { display: none; }
+    .msg { margin-bottom: 14px; animation: in .25s ease-out; }
+    .msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 12px; color: var(--muted); }
+    .msg-head .av { width: 26px; height: 26px; flex: none; border-radius: 9px; overflow: hidden; background: var(--board); display: grid; place-items: center; font-size: 11px; font-weight: 800; color: var(--ink-soft); }
+    .msg-head .av svg { width: 30px; height: 30px; }
+    .msg-head strong { color: var(--ink); font-size: 13px; }
+    .tag { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+    .tag.support { background: #e1f1e8; color: #2f7556; }
+    .tag.fix { background: #fbf0d3; color: #8a6414; }
+    .tag.no { background: #f9e2dd; color: #a8412f; }
+    .bubble { background: #f3f7f3; border-radius: 4px 14px 14px; padding: 10px 12px; font-size: 13.5px; color: var(--ink-soft); white-space: pre-line; }
+    .msg.chair .bubble { background: #fff6e2; }
+    .divider { margin: 4px 0 14px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+    .divider span { font-weight: 400; color: var(--muted); margin-left: 6px; }
+    .notice { font-size: 13px; color: #a8412f; background: #fbeae6; border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; }
+
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 13px; transition: .2s; z-index: 9; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239,120,93,.35); } 100% { box-shadow: 0 0 0 7px rgba(239,120,93,0); } }
+    @keyframes bob { to { transform: translateY(-3px) rotate(1deg); } }
+    @keyframes in { from { opacity: 0; transform: translateY(5px); } }
+
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: minmax(0, 1fr); }
+      .log { position: static; max-height: none; }
+      .feed { max-height: 520px; }
+    }
+    @media (max-width: 560px) {
+      .page { padding: 18px 14px 40px; }
+      header h1 { font-size: 24px; }
+      .card { padding: 16px; }
+      .go { width: 100%; margin-left: 0; }
+      .steps { flex-wrap: wrap; }
+      .step { flex: 1 1 45%; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>顾问会</h1>
+      <p>写下你拿不定主意的事，让几位性格迥异的顾问各说各话，最后给你一个建议。</p>
+    </header>
+
+    <div class="layout">
+      <div class="col">
+        <section class="card" aria-label="填写问题">
+          <label class="field-label" for="decision">你要决定什么？</label>
+          <textarea id="decision" class="input" placeholder="例如：要不要辞职去创业？">要不要在奥斯汀举办 2027 年创始人峰会？</textarea>
+          <label class="field-label" for="context" style="margin-top:14px">补充背景 <span class="field-hint">（预算、时间、顾虑、备选方案，写得越具体越好）</span></label>
+          <textarea id="context" class="input" placeholder="例如：预算 8 万美元，场地要提前半年订，目前有 120 人表示感兴趣但没人付费。">预算最多 8 万美元；场地需提前 6 个月预订；目前有 120 人表示感兴趣，但还没有付费报名。选项：A 小规模试办，B 全面启动，C 延后。我们最需要判断：先用什么信号决定是否扩大？</textarea>
+          <div class="controls">
+            <div class="seg" role="group" aria-label="顾问人数">
+              <button data-mode="quick" aria-pressed="false">快速 · 4 位</button>
+              <button data-mode="full" aria-pressed="true">完整 · 7 位</button>
+            </div>
+            <button class="go" id="go">开始开会</button>
+          </div>
+          <details class="settings">
+            <summary>AI 设置</summary>
+            <div class="settings-body">
+              <label>Gemini API Key
+                <input id="apiKey" type="password" autocomplete="off" placeholder="粘贴你的 Gemini Key">
+              </label>
+              <label>模型名称
+                <input id="model" type="text">
+              </label>
+              <p class="settings-note">到 aistudio.google.com/apikey 免费申请 Key。Key 只保存在你自己的浏览器里，不会上传到本站。免费档有每分钟次数限制，会议会自动放慢、遇到限流会自动重试，整场约 1～3 分钟。你写的内容会发送给 Google；免费档的内容可能被用于改进产品，请不要写隐私信息。</p>
+            </div>
+          </details>
+        </section>
+
+        <section class="card room" aria-label="会议室">
+          <div class="room-head">
+            <h2>会议室</h2>
+            <div class="status" id="status"><i></i><span>等待开始</span></div>
+          </div>
+          <div class="steps" id="steps">
+            <div class="step">① 各自发表看法</div>
+            <div class="step">② 匿名互相点评</div>
+            <div class="step">③ 专门唱反调</div>
+            <div class="step">④ 主持人总结</div>
+          </div>
+          <div class="seats" id="seats" aria-live="polite"></div>
+        </section>
+
+        <section class="card" aria-label="结果">
+          <h2>顾问们怎么看</h2>
+          <div class="tally">
+            <div class="tally-row"><span>支持</span><div class="bar"><i id="barSupport"></i></div><strong id="nSupport">0</strong></div>
+            <div class="tally-row"><span>先补条件</span><div class="bar"><i id="barFix"></i></div><strong id="nFix">0</strong></div>
+            <div class="tally-row"><span>不建议</span><div class="bar"><i id="barNo"></i></div><strong id="nNo">0</strong></div>
+          </div>
+          <p class="legend"><b>支持</b>：建议去做　<b>先补条件</b>：想法可行，但要先解决几个问题　<b>不建议</b>：建议放弃</p>
+          <h2 style="margin-top:20px">最终建议</h2>
+          <div id="result" class="result-empty">会议结束后，主持人的总结会显示在这里。</div>
+        </section>
+      </div>
+
+      <aside class="card log" aria-label="会议记录">
+        <div class="log-head"><h2>会议记录</h2><span id="count">0 条</span></div>
+        <div class="feed" id="feed" aria-live="polite">
+          <div class="feed-empty" id="feedEmpty">还没开始。点“开始开会”，顾问们的发言会一条条出现在这里。</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    const people = [
+      { name: "马斯克式", lens: "第一性原理 · 激进目标", skin: "#e0b08c", hair: "#2f2a28", shirt: "#23272e", bg: "#c8d3e0", style: "neat", glasses: false },
+      { name: "质疑辩手", lens: "步步追问 · 挑逻辑漏洞", skin: "#d69a76", hair: "#303236", shirt: "#8a4b5e", bg: "#ecd2d6", style: "part", glasses: true },
+      { name: "原始人", lens: "生存本能 · 吃饱活下去", skin: "#b9805c", hair: "#4a3226", shirt: "#8b6b45", bg: "#e3d3b5", style: "wave", glasses: false },
+      { name: "科学家", lens: "假设 · 实验 · 证据", skin: "#e5b28b", hair: "#cfcac0", shirt: "#e9eef0", bg: "#cfe3e6", style: "silver", glasses: true },
+      { name: "运动员", lens: "训练 · 纪律 · 比赛心态", skin: "#c38a69", hair: "#1f2326", shirt: "#e8775f", bg: "#f6d8cb", style: "fade", glasses: false },
+      { name: "领袖", lens: "愿景 · 团队 · 担当", skin: "#d3a17e", hair: "#5a5143", shirt: "#33507a", bg: "#d4def0", style: "short", glasses: false },
+      { name: "顺从者", lens: "附和权威 · 避免冲突", skin: "#e8bf9c", hair: "#8a6a4a", shirt: "#9cb9a8", bg: "#e4eee6", style: "curl", glasses: false }
+    ];
+    const quickSeats = [0, 1, 3, 5];
+    const personas = [
+      "你是‘马斯克式’顾问（模拟其思维风格，不代表本人）。方法：用第一性原理把问题拆到物理/成本底层，质疑一切‘行业惯例’，设定近乎疯狂的激进目标和极短期限，愿意为大上行承受高风险。说话直接、自信、带点挑衅。倾向支持，且常主张做得比方案更大更快。",
+      "你是‘质疑辩手’，一个热爱抬杠的辩论人。方法：对简报里每一个论断追问‘凭什么’‘证据在哪’‘反例呢’，专找逻辑漏洞、循环论证和偷换概念。你不轻易给出支持，除非论证无懈可击；通常倾向先补条件或不建议，并明确指出哪句话站不住脚。",
+      "你是‘原始人’，生活在部落里，只懂打猎、采集、火、危险和部落生存。你听不懂商业术语，用最朴素的比喻（食物、猛兽、过冬、部落）来判断：能不能吃饱、会不会被吃掉、值不值得冒险离开山洞。语言简短、直白、带点粗犷。",
+      "你是‘科学家’。方法：把决定转成可检验的假设，设计最小实验，区分相关与因果，关注样本量、对照组、偏差和不确定性。拒绝没有数据的断言，习惯说‘现有证据只能支持到……’。倾向先补条件：先做实验再下结论。",
+      "你是‘运动员’（职业竞技选手）。方法：用训练计划、纪律、状态管理、赛前准备和比赛心态来看问题；强调‘赛季’‘节奏’‘伤病’‘复盘’，相信长期积累和执行力，讨厌空谈。语气坚韧、热血、务实。",
+      "你是‘领袖’。方法：关注愿景是否清晰、团队能否被凝聚、谁来担责、如何在压力下做决定并承担后果。你重视人心、士气和长期信誉，愿意做艰难取舍，也会指出决定对团队意味着什么。语气沉稳、有感召力。",
+      "你是‘顺从者’。你缺乏主见，习惯附和你认为的权威和多数；你会先猜测简报作者倾向什么，然后找理由支持，措辞小心翼翼，常说‘大家说得都对’‘听领导的’，回避冲突。你的结论倾向与简报里提到的方案一致。你的存在是为了暴露群体中的从众压力。"
+    ];
+    // 每位顾问的独立参数：temp 越高越发散；model 留空 = 用设置里的默认模型
+    const advisorCfg = [
+      { temp: 1.0, model: "" }, { temp: 0.6, model: "" }, { temp: 1.0, model: "" }, { temp: 0.3, model: "" },
+      { temp: 0.7, model: "" }, { temp: 0.5, model: "" }, { temp: 0.4, model: "" }
+    ];
+    const reviewers = [
+      { label: "匿名审阅者 A", focus: "最强意见：指出最有力、最值得采纳的共同信号" },
+      { label: "匿名审阅者 B", focus: "最大盲点：指出所有顾问都忽略的关键问题" },
+      { label: "匿名审阅者 C", focus: "表面共识：检查一致意见是否只是表面一致、理由是否重复" }
+    ];
+    const VERDICTS = { "支持": "support", "先补条件": "fix", "不建议": "no" };
+    const FORMAT = "\n\n请用简体中文，严格按以下四行格式回答，每项一句话，总共不超过 160 字：\n结论：支持 或 先补条件 或 不建议（三选一，只写这几个字）\n看法：...\n风险：...\n建议：...\n坚持你自己的角色立场，不要为了折中而附和他人；如果你的角色会得出与常理不同的结论，请直说。";
+
+    const hairPaths = {
+      short: "M35 52 Q34 25 62 23 Q88 23 91 48 L85 47 Q78 37 70 40 Q53 47 40 43 Z",
+      curl: "M35 53 Q26 39 34 30 Q34 19 46 22 Q54 14 63 22 Q74 14 81 24 Q95 23 94 38 Q98 47 88 55 L83 42 Q65 50 43 43 Z",
+      fade: "M37 49 Q38 25 61 25 Q83 25 87 47 L80 42 Q65 48 43 42 Z",
+      wave: "M35 53 Q27 41 36 33 Q32 20 47 22 Q58 14 66 24 Q82 16 86 30 Q99 35 91 52 L83 43 Q70 52 42 43 Z",
+      part: "M37 50 Q37 26 60 24 Q83 25 88 48 Q77 37 65 37 Q53 37 42 44 Z M62 25 Q70 24 77 28 L65 39 Z",
+      neat: "M38 49 Q39 27 61 25 Q84 26 87 48 Q77 42 69 42 Q51 43 41 46 Z",
+      silver: "M37 51 Q35 29 48 25 Q62 17 74 24 Q87 25 89 45 L82 43 Q73 35 66 38 Q53 42 42 42 Z"
+    };
+    function avatarSvg(p) {
+      const hair = hairPaths[p.style];
+      const glasses = p.glasses ? `<g fill="none" stroke="#34443f" stroke-width="2.2"><circle cx="51" cy="55" r="8"/><circle cx="73" cy="55" r="8"/><path d="M59 55h6M43 54l-4-2m42 2 4-2"/></g>` : "";
+      const brows = p.glasses ? "" : `<path d="M46 47q6-4 11 0m8 0q6-4 11 0" fill="none" stroke="#543d35" stroke-width="2" stroke-linecap="round"/>`;
+      return `<svg viewBox="0 0 128 128" role="img" aria-label="${p.name}的头像">
+        <circle cx="64" cy="64" r="60" fill="${p.bg}"/>
+        <path d="M18 124q4-35 30-39h32q27 4 31 39" fill="${p.shirt}"/>
+        <path d="M55 75h18v18q-9 9-18 0z" fill="${p.skin}"/>
+        <ellipse cx="39" cy="59" rx="6" ry="9" fill="${p.skin}"/><ellipse cx="89" cy="59" rx="6" ry="9" fill="${p.skin}"/>
+        <path d="${hair}" fill="${p.hair}"/>
+        <ellipse cx="64" cy="58" rx="24" ry="30" fill="${p.skin}"/>
+        <path d="${hair}" fill="${p.hair}"/>
+        ${brows}
+        <ellipse cx="53" cy="59" rx="2" ry="2.5" fill="#263532"/><ellipse cx="75" cy="59" rx="2" ry="2.5" fill="#263532"/>
+        <path d="M63 60l-2 8 4 1" fill="none" stroke="#a96e58" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M57 75q7 5 14 0" fill="none" stroke="#864f45" stroke-width="1.8" stroke-linecap="round"/>
+        ${glasses}
+      </svg>`;
+    }
+
+    const $ = id => document.getElementById(id);
+    const decisionEl = $("decision"), contextEl = $("context"), goBtn = $("go");
+    const keyEl = $("apiKey"), modelEl = $("model");
+    let mode = "full", running = false, token = 0, controller = null, count = 0, votes = { support: 0, fix: 0, no: 0 };
+
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    };
+    const DEFAULT_MODEL = "gemini-3.8-flash";
+    keyEl.value = store.get("counsel_key_gemini") || "";
+    modelEl.value = store.get("counsel_model_gemini") || DEFAULT_MODEL;
+    keyEl.addEventListener("change", () => store.set("counsel_key_gemini", keyEl.value.trim()));
+    modelEl.addEventListener("change", () => store.set("counsel_model_gemini", modelEl.value.trim()));
+
+    function activeSeats() { return mode === "quick" ? quickSeats : people.map((_, i) => i); }
+    function renderSeats() {
+      $("seats").innerHTML = activeSeats().map(i => {
+        const p = people[i];
+        return `<div class="seat" data-seat="${i}">${avatarSvg(p)}<b>${p.name}</b><small>${p.lens}</small><em>待命</em></div>`;
+      }).join("");
+    }
+    function setSeat(i, state) {
+      const el = document.querySelector(`.seat[data-seat="${i}"]`); if (!el) return;
+      el.classList.toggle("active", state === "thinking");
+      if (state === "done") el.classList.add("spoke");
+      el.querySelector("em").textContent = state === "thinking" ? "正在思考…" : (el.classList.contains("spoke") ? "已发言" : "待命");
+    }
+    function setStatus(kind, text) { $("status").className = "status " + kind; $("status").lastElementChild.textContent = text; }
+    function setStep(n) { [...$("steps").children].forEach((el, i) => { el.className = "step" + (i < n ? " done" : i === n ? " current" : ""); }); }
+    function toast(text) { const t = $("toast"); t.textContent = text; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 2400); }
+    function updateTally() {
+      const total = votes.support + votes.fix + votes.no;
+      [["Support", "support"], ["Fix", "fix"], ["No", "no"]].forEach(([k, v]) => {
+        $("n" + k).textContent = votes[v];
+        $("bar" + k).style.width = total ? votes[v] / total * 100 + "%" : "0%";
+      });
+    }
+    const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    function feedAdd(html) { $("feedEmpty").hidden = true; $("feed").insertAdjacentHTML("beforeend", html); $("feed").scrollTop = $("feed").scrollHeight; }
+    function addDivider(title, note) { feedAdd(`<div class="divider">${title}<span>${note}</span></div>`); }
+    function addMsg({ name, role, avatar, text, verdict, cls = "" }) {
+      count++; $("count").textContent = count + " 条";
+      const tag = verdict ? `<span class="tag ${VERDICTS[verdict]}">${verdict}</span>` : "";
+      feedAdd(`<article class="msg ${cls}"><div class="msg-head"><span class="av">${avatar}</span><strong>${esc(name)}</strong><span>${esc(role)}</span>${tag}</div><div class="bubble">${esc(text)}</div></article>`);
+    }
+    function resetUi() {
+      count = 0; votes = { support: 0, fix: 0, no: 0 };
+      $("feed").innerHTML = '<div class="feed-empty" id="feedEmpty">还没开始。点“开始开会”，顾问们的发言会一条条出现在这里。</div>';
+      $("count").textContent = "0 条";
+      $("result").className = "result-empty"; $("result").textContent = "会议结束后，主持人的总结会显示在这里。";
+      renderSeats(); updateTally(); setStep(-1); setStatus("", "等待开始");
+    }
+
+    async function callLLM(system, user, maxTokens = 700, temp = 0.7, model = "") {
+      const useModel = model || modelEl.value.trim();
+      const signal = controller.signal;
+      if (!keyEl.value.trim()) throw new Error("请先展开“AI 设置”，填写你的 Gemini API Key。");
+      {
+        const body = { systemInstruction: { parts: [{ text: system }] }, contents: [{ role: "user", parts: [{ text: user }] }],
+          // 新模型可能先“思考”再回答，思考也计入输出上限，所以给足额度避免回答被截断
+          generationConfig: { temperature: Math.min(temp, 2), maxOutputTokens: maxTokens * 4 } };
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(useModel)}:generateContent`, {
+            method: "POST", signal, headers: { "content-type": "application/json", "x-goog-api-key": keyEl.value.trim() }, body: JSON.stringify(body)
+          });
+          const j = await r.json().catch(() => ({}));
+          if (r.status === 429 && attempt < 4) { setStatus("running", "触发免费限速，稍等重试…"); await sleep(8000 * (attempt + 1), signal); setStatus("running", "会议进行中"); continue; }
+          if (!r.ok) throw new Error(r.status === 400 || r.status === 403 ? "Gemini 拒绝了请求，请检查 Key 和模型名：" + (j.error?.message || r.status) : j.error?.message || "Gemini 出错（" + r.status + "）");
+          const text = (j.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim();
+          if (!text) throw new Error("Gemini 没有返回内容（可能被安全过滤），请换个问法再试。");
+          return text;
+        }
+        throw new Error("Gemini 请求过于频繁，请稍后再试。");
+      }
+    }
+    const sleep = (ms, signal) => new Promise((res, rej) => {
+      const t = setTimeout(res, ms);
+      signal.addEventListener("abort", () => { clearTimeout(t); rej(new DOMException("aborted", "AbortError")); }, { once: true });
+    });
+    async function pool(items, limit, fn) {
+      let next = 0;
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => { while (next < items.length) { const i = next++; await fn(items[i], i); } }));
+    }
+    const parseVerdict = t => (t.match(/(?:结论|最终建议)[:：]\s*\**\s*(支持|先补条件|不建议)/) || [])[1] || null;
+
+    function stop(message) {
+      token++; if (controller) controller.abort(); running = false;
+      document.querySelectorAll(".seat").forEach(el => el.classList.remove("active"));
+      goBtn.textContent = "重新开会"; goBtn.classList.remove("stop");
+      if (message) setStatus("", message);
+    }
+    async function run() {
+      if (running) { stop("已停止"); return; }
+      const question = decisionEl.value.trim();
+      if (!question) { toast("请先写下你要决定的事"); decisionEl.focus(); return; }
+      resetUi();
+      const my = ++token, alive = () => my === token;
+      controller = new AbortController(); running = true;
+      goBtn.textContent = "停止"; goBtn.classList.add("stop"); setStatus("running", "会议进行中");
+      const brief = `决策：${question}\n背景：${contextEl.value.trim() || "未提供"}`;
+      const seats = activeSeats(), serial = true;
+      try {
+        setStep(0); addDivider("① 各自发表看法", "每位顾问独立给出意见");
+        const opinions = [];
+        await pool(seats, serial ? 1 : 7, async idx => {
+          if (!alive()) return;
+          setSeat(idx, "thinking");
+          const cfg = advisorCfg[idx];
+          const text = await callLLM(personas[idx] + "\n你正在一个决策顾问会上，独立评审提交上来的决策。", brief + FORMAT, 700, cfg.temp, cfg.model);
+          if (!alive()) return;
+          const verdict = parseVerdict(text);
+          if (verdict) votes[VERDICTS[verdict]]++;
+          opinions.push({ idx, text });
+          setSeat(idx, "done"); updateTally();
+          addMsg({ name: people[idx].name, role: people[idx].lens, avatar: avatarSvg(people[idx]), text: text.replace(/^结论[:：].*\n?/, ""), verdict });
+        });
+        if (!alive()) return;
+        const anon = opinions.map((o, i) => `顾问${i + 1}：\n${o.text}`).join("\n\n");
+
+        if (mode === "full") {
+          setStep(1); addDivider("② 匿名互相点评", "审阅者看不到是谁说的");
+          await pool(reviewers, serial ? 1 : 3, async r => {
+            const text = await callLLM("你是匿名审阅者，只看到去掉姓名的顾问意见。请用简体中文，不超过 120 字，从这个角度审阅：" + r.focus, `${brief}\n\n各位顾问的意见：\n${anon}`, 500);
+            if (!alive()) return;
+            addMsg({ name: r.label, role: r.focus.split("：")[0], avatar: r.label.slice(-1), text });
+          });
+          if (!alive()) return;
+        }
+
+        setStep(2); addDivider("③ 专门唱反调", "攻击正在形成的共识");
+        const da = await callLLM("你是唱反调的人。先用一句话概括目前大家倾向的结论，再给出对它最有力的反驳（具体的反例），最后列出‘要推翻这个结论，至少还需要知道什么’。简体中文，不超过 220 字。", `${brief}\n\n顾问意见：\n${anon}`, 700);
+        if (!alive()) return;
+        addMsg({ name: "反方", role: "最有力的反驳", avatar: "反", text: da });
+
+        setStep(3); addDivider("④ 主持人总结", "综合所有意见给出建议");
+        const chair = await callLLM("你是会议主持人。综合各顾问意见和反方质疑，不要简单数票，要权衡证据强弱。用简体中文，严格按格式：\n分歧：顾问之间最关键的分歧\n最终建议：支持 或 先补条件 或 不建议（只写这几个字之一）\n理由：一句话\n第一步：今天就能做的一件事\n如何验证：怎么判断这个建议对不对\n总计不超过 260 字。", `${brief}\n\n顾问意见：\n${anon}\n\n反方质疑：\n${da}`, 900);
+        if (!alive()) return;
+        addMsg({ name: "主持人", role: "总结", avatar: "主", text: chair, cls: "chair" });
+        const rec = parseVerdict(chair);
+        $("result").className = "";
+        $("result").innerHTML = `<div class="result-title">${rec ? "建议：" + rec : "总结"}</div><div class="result-text">${esc(chair)}</div>`;
+        setStep(4); setStatus("done", "会议结束");
+        running = false; goBtn.textContent = "重新开会"; goBtn.classList.remove("stop");
+      } catch (e) {
+        if (e.name === "AbortError" || !alive()) return;
+        stop("出错了");
+        feedAdd(`<div class="notice">${esc(e.message)}</div>`);
+        toast("出错了，详情见会议记录");
+      }
+    }
+
+    goBtn.addEventListener("click", run);
+    document.querySelectorAll("[data-mode]").forEach(b => b.addEventListener("click", () => {
+      if (running) stop();
+      mode = b.dataset.mode;
+      document.querySelectorAll("[data-mode]").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+      goBtn.textContent = "开始开会"; resetUi();
+    }));
+    renderSeats(); setStep(-1);
+  </script>
+</body>
+</html>
